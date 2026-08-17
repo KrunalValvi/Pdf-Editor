@@ -209,6 +209,8 @@ input { font-family: inherit; }
   box-shadow: var(--shadow-page);
   background: var(--page-bg);
   border-radius: 2px; flex-shrink: 0;
+  transition: none;
+  contain: layout style;
 }
 .pdf-page-container img {
   display: block; max-width: 100%;

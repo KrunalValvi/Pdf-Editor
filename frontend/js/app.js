@@ -20,6 +20,11 @@ class PDFFooterEditor {
         this.activeSheet = null;
         this.mFindResults = [];
         this.mFindIndex = -1;
+        this.renderZoom = 1.0;
+        this.renderGen = 0;
+        this._zoomTimer = null;
+        this._baseWidth = 0;
+        this._baseHeight = 0;
 
         this.init();
     }
@@ -398,20 +403,35 @@ class PDFFooterEditor {
         this.updatePageInfo();
         this.updateThumbnailHighlight();
 
+        const gen = ++this.renderGen;
+
         try {
             const viewerContent = this.$('viewer-content');
+
             const container = document.createElement('div');
             container.className = 'pdf-page-container';
 
             const img = document.createElement('img');
             img.src = `/api/pdf/${this.sessionId}/page/${pageNumber}?zoom=${this.zoom}&v=${this.imageVersion}`;
             img.alt = `Page ${pageNumber}`;
-
             container.appendChild(img);
+
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error('Failed to load image'));
+            });
+
+            if (gen !== this.renderGen) return;
+
+            this.renderZoom = this.zoom;
+            this._baseWidth = img.naturalWidth;
+            this._baseHeight = img.naturalHeight;
+
+            container.style.zoom = '';
+
             viewerContent.innerHTML = '';
             viewerContent.appendChild(container);
 
-            await new Promise(resolve => { img.onload = resolve; });
             await this.loadTextOverlay(pageNumber, container, img);
 
         } catch (error) {
@@ -756,40 +776,86 @@ class PDFFooterEditor {
        ZOOM & NAVIGATION
        ======================================== */
     refreshPage() {
+        clearTimeout(this._zoomTimer);
         this.imageVersion++;
         this.loadPage(this.currentPage);
     }
 
-    zoomIn() {
-        this.zoom = Math.min(3.0, this.zoom + 0.25);
-        this.loadPage(this.currentPage);
+    setZoom(newZoom) {
+        newZoom = Math.max(0.25, Math.min(3.0, newZoom));
+        if (Math.abs(newZoom - this.zoom) < 0.001) return;
+        this.zoom = newZoom;
         this.updateZoomLevel();
+        if (!this.sessionId) return;
+        this.applyVisualZoom();
+        this.scheduleRender();
     }
 
-    zoomOut() {
-        this.zoom = Math.max(0.25, this.zoom - 0.25);
-        this.loadPage(this.currentPage);
-        this.updateZoomLevel();
+    applyVisualZoom() {
+        const container = document.querySelector('.pdf-page-container');
+        if (!container || !this.renderZoom || this.renderZoom < 0.001) return;
+        const factor = this.zoom / this.renderZoom;
+        container.style.zoom = factor;
     }
+
+    scheduleRender() {
+        clearTimeout(this._zoomTimer);
+        this._zoomTimer = setTimeout(() => this.performRender(), 300);
+    }
+
+    async performRender() {
+        const gen = ++this.renderGen;
+        const pageNumber = this.currentPage;
+
+        try {
+            const viewerContent = this.$('viewer-content');
+
+            const container = document.createElement('div');
+            container.className = 'pdf-page-container';
+
+            const img = document.createElement('img');
+            img.src = `/api/pdf/${this.sessionId}/page/${pageNumber}?zoom=${this.zoom}&v=${this.imageVersion}`;
+            img.alt = `Page ${pageNumber}`;
+            container.appendChild(img);
+
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error('Failed to load image'));
+            });
+
+            if (gen !== this.renderGen) return;
+
+            this.renderZoom = this.zoom;
+            this._baseWidth = img.naturalWidth;
+            this._baseHeight = img.naturalHeight;
+
+            viewerContent.innerHTML = '';
+            viewerContent.appendChild(container);
+
+            await this.loadTextOverlay(pageNumber, container, img);
+
+        } catch (error) {
+            console.error('Error performing render:', error);
+        }
+    }
+
+    zoomIn() { this.setZoom(this.zoom + 0.25); }
+    zoomOut() { this.setZoom(this.zoom - 0.25); }
 
     fitWidth() {
         const w = this.$('viewer-content').clientWidth - 64;
-        this.zoom = w / 595;
-        this.loadPage(this.currentPage);
-        this.updateZoomLevel();
+        this.setZoom(w / 595);
     }
 
     fitPage() {
         const c = this.$('viewer-content');
         if (this.isMobile) {
-            this.zoom = (c.clientWidth - 16) / 595;
+            this.setZoom((c.clientWidth - 16) / 595);
         } else {
             const zx = (c.clientWidth - 64) / 595;
             const zy = (c.clientHeight - 64) / 842;
-            this.zoom = Math.min(zx, zy);
+            this.setZoom(Math.min(zx, zy));
         }
-        this.loadPage(this.currentPage);
-        this.updateZoomLevel();
     }
 
     updateZoomLevel() {
@@ -1476,13 +1542,7 @@ class PDFFooterEditor {
                 const now = Date.now();
                 if (now - lastTap < 300) {
                     e.preventDefault();
-                    if (this.zoom > 1.0) {
-                        this.zoom = 1.0;
-                    } else {
-                        this.zoom = 2.0;
-                    }
-                    this.loadPage(this.currentPage);
-                    this.updateZoomLevel();
+                    this.setZoom(this.zoom > 1.0 ? 1.0 : 2.0);
                 }
                 lastTap = now;
             }
@@ -1493,9 +1553,7 @@ class PDFFooterEditor {
                 e.preventDefault();
                 const currentDistance = this.getTouchDistance(e.touches);
                 const scale = currentDistance / initialDistance;
-                this.zoom = Math.max(0.25, Math.min(3.0, initialZoom * scale));
-                this.loadPage(this.currentPage);
-                this.updateZoomLevel();
+                this.setZoom(initialZoom * scale);
             }
         }, { passive: false });
     }
