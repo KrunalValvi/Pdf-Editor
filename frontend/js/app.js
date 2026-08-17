@@ -1179,7 +1179,11 @@ class PDFFooterEditor {
     }
 
     async applyMobileEdit() {
-        if (!this.selectedBlock) return;
+        const editTarget = this.selectedBlock;
+        if (!editTarget) {
+            this.showToast('No text selected', 'warning');
+            return;
+        }
 
         const newText = this.$('m-edit-new').value;
         const scope = document.querySelector('input[name="m-scope"]:checked')?.value || 'current';
@@ -1200,14 +1204,14 @@ class PDFFooterEditor {
 
             if (scope === 'all') {
                 endpoint = `/api/pdf/${this.sessionId}/replace-footer-all`;
-                body = { search_text: this.selectedBlock?.text || newText, new_text: newText, case_sensitive: false };
+                body = { search_text: editTarget.text || newText, new_text: newText, case_sensitive: false };
             } else {
                 endpoint = `/api/pdf/${this.sessionId}/replace-text`;
                 body = {
                     page_number: this.currentPage,
-                    original_text: this.selectedBlock.text,
+                    original_text: editTarget.text,
                     new_text: newText,
-                    bbox: this.selectedBlock.bbox,
+                    bbox: editTarget.bbox,
                     font_size: fontSize,
                     color: this.hexToRgb(color)
                 };
