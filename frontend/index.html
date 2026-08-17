@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PDF Editor</title>
 <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -367,6 +367,222 @@
     </div>
   </div>
 </div>
+
+<!-- ============================================================
+     MOBILE UI (hidden on desktop, shown ≤768px)
+     ============================================================ -->
+
+<!-- MOBILE TOP BAR -->
+<div class="m-topbar m-only" id="m-topbar">
+  <button class="m-tb-btn" id="m-back" aria-label="Back">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+  </button>
+  <div class="m-tb-title" id="m-filename">PDF Editor</div>
+  <div class="m-tb-right">
+    <button class="m-tb-btn" id="m-undo" aria-label="Undo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5A5.5 5.5 0 0 1 20 14.5v0A5.5 5.5 0 0 1 14.5 20H11"/></svg>
+    </button>
+    <button class="m-tb-btn" id="m-redo" aria-label="Redo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg>
+    </button>
+    <button class="m-tb-export" id="m-export-btn">Export</button>
+  </div>
+</div>
+
+<!-- MOBILE BOTTOM TOOLBAR -->
+<div class="m-toolbar m-only" id="m-toolbar">
+  <button class="m-tool-btn active" data-mtool="select" aria-label="Edit">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l7.07 17 2.51-7.39L21 11.07z"/></svg>
+    <span>Edit</span>
+  </button>
+  <button class="m-tool-btn" data-mtool="find" aria-label="Find">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+    <span>Find</span>
+  </button>
+  <button class="m-tool-btn" data-mtool="pages" aria-label="Pages">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+    <span>Pages</span>
+  </button>
+  <button class="m-tool-btn" data-mtool="more" aria-label="More">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+    <span>More</span>
+  </button>
+</div>
+
+<!-- MOBILE PAGE PILL -->
+<div class="m-page-pill m-only" id="m-page-pill">
+  <span id="m-page-info">0 / 0</span>
+</div>
+
+<!-- SHEET OVERLAY -->
+<div class="m-sheet-overlay" id="m-sheet-overlay"></div>
+
+<!-- ===== TOOLS MENU SHEET ===== -->
+<div class="m-sheet" id="m-tools-sheet">
+  <div class="m-sheet-handle"></div>
+  <div class="m-sheet-title">Tools</div>
+  <div class="m-sheet-items">
+    <button class="m-sheet-item" data-maction="smart-footer">
+      <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M2 15h20"/><path d="M6 19h4"/></svg>
+      <div class="m-sheet-item-text">
+        <strong>Smart Footer</strong>
+        <small>Detect and replace footer text across pages</small>
+      </div>
+    </button>
+    <button class="m-sheet-item" data-maction="page-numbers">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
+      <div class="m-sheet-item-text">
+        <strong>Page Numbers</strong>
+        <small>Add or edit page numbers</small>
+      </div>
+    </button>
+    <button class="m-sheet-item" data-maction="insert-image">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      <div class="m-sheet-item-text">
+        <strong>Insert Image</strong>
+        <small>Add an image to the PDF</small>
+      </div>
+    </button>
+  </div>
+</div>
+
+<!-- ===== TEXT EDIT SHEET ===== -->
+<div class="m-sheet" id="m-edit-sheet">
+  <div class="m-sheet-handle"></div>
+  <div class="m-sheet-title">Edit Text</div>
+  <div class="m-sheet-body">
+    <label class="m-field-label">Current text</label>
+    <div class="m-field-display" id="m-edit-current">—</div>
+
+    <label class="m-field-label">New text</label>
+    <textarea class="m-field-input" id="m-edit-new" rows="2" placeholder="Enter new text..."></textarea>
+
+    <label class="m-field-label">Font</label>
+    <div class="m-field-display" id="m-edit-font" style="font-size:12px;">—</div>
+
+    <div class="m-field-row" style="margin-top:12px">
+      <div class="m-field-half">
+        <label class="m-field-label">Size</label>
+        <input type="number" class="m-field-input" id="m-edit-size" value="12" min="6" max="72">
+      </div>
+      <div class="m-field-half">
+        <label class="m-field-label">Color</label>
+        <input type="color" class="m-field-color" id="m-edit-color" value="#000000">
+      </div>
+    </div>
+
+    <label class="m-field-label">Apply to</label>
+    <div class="m-radio-group">
+      <label class="m-radio-item"><input type="radio" name="m-scope" value="current" checked> This page only</label>
+      <label class="m-radio-item"><input type="radio" name="m-scope" value="all"> All pages</label>
+    </div>
+
+    <div class="m-sheet-actions">
+      <button class="m-btn-ghost" id="m-edit-cancel">Cancel</button>
+      <button class="m-btn-primary" id="m-edit-apply" disabled>Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PAGES SHEET ===== -->
+<div class="m-sheet m-sheet-tall" id="m-pages-sheet">
+  <div class="m-sheet-handle"></div>
+  <div class="m-sheet-title">Pages <span id="m-pages-count">0</span></div>
+  <div class="m-sheet-body m-pages-grid" id="m-pages-grid"></div>
+</div>
+
+<!-- ===== FIND SHEET ===== -->
+<div class="m-sheet m-sheet-tall" id="m-find-sheet">
+  <div class="m-sheet-handle"></div>
+  <div class="m-find-bar">
+    <div class="m-find-input-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" id="m-find-input" placeholder="Search in document...">
+      <span class="m-find-count" id="m-find-count"></span>
+    </div>
+    <button class="m-find-close" id="m-find-close">&times;</button>
+  </div>
+  <div class="m-find-row">
+    <button class="m-replace-toggle" id="m-replace-toggle">Replace</button>
+    <div class="m-find-results" id="m-find-results"></div>
+  </div>
+  <div class="m-replace-section" id="m-replace-section">
+    <div class="m-find-input-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      <input type="text" id="m-replace-input" placeholder="Replace with">
+    </div>
+    <div class="m-find-actions">
+      <button class="m-btn-ghost" id="m-replace-one">Replace</button>
+      <button class="m-btn-primary" id="m-replace-all-m">Replace All</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SMART FOOTER SHEET ===== -->
+<div class="m-sheet m-sheet-tall" id="m-footer-sheet">
+  <div class="m-sheet-handle"></div>
+  <div class="m-sheet-title">Smart Footer</div>
+  <div class="m-sheet-body">
+    <p class="m-sheet-hint">Detect and replace footer text across all pages of the document.</p>
+    <button class="m-btn-primary" id="m-detect-footer" style="width:100%;">Detect Footers</button>
+    <div id="m-footer-results" class="m-footer-results"></div>
+    <div id="m-footer-edit" style="display:none">
+      <label class="m-field-label">Original text</label>
+      <div class="m-field-display" id="m-footer-original">—</div>
+      <label class="m-field-label">Replace with</label>
+      <input type="text" class="m-field-input" id="m-footer-new" placeholder="New footer text...">
+      <button class="m-btn-primary" id="m-footer-apply" style="width:100%;margin-top:14px;">Replace on All Pages</button>
+      <button class="m-btn-ghost" id="m-footer-cancel" style="width:100%;margin-top:8px;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PAGE NUMBERS SHEET ===== -->
+<div class="m-sheet" id="m-pagenum-sheet">
+  <div class="m-sheet-handle"></div>
+  <div class="m-sheet-title">Page Numbers</div>
+  <div class="m-sheet-body">
+    <label class="m-field-label">Format</label>
+    <select class="m-field-input" id="m-pn-format">
+      <option value="{page}">{page}</option>
+      <option value="Page {page}">Page {page}</option>
+      <option value="{page} of {total}">{page} of {total}</option>
+      <option value="- {page} -">- {page} -</option>
+    </select>
+    <label class="m-field-label">Position</label>
+    <select class="m-field-input" id="m-pn-position">
+      <option value="bottom-center">Bottom Center</option>
+      <option value="bottom-left">Bottom Left</option>
+      <option value="bottom-right">Bottom Right</option>
+      <option value="top-center">Top Center</option>
+      <option value="top-left">Top Left</option>
+      <option value="top-right">Top Right</option>
+    </select>
+    <label class="m-field-label">Start from</label>
+    <input type="number" class="m-field-input" id="m-pn-start" value="1" min="1">
+    <div class="m-sheet-actions">
+      <button class="m-btn-primary" id="m-pn-apply" style="flex:2">Apply Page Numbers</button>
+      <button class="m-btn-ghost" id="m-pn-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EXPORT SHEET ===== -->
+<div class="m-sheet" id="m-export-sheet">
+  <div class="m-sheet-handle"></div>
+  <div class="m-sheet-title">Export PDF</div>
+  <div class="m-sheet-body">
+    <div class="m-radio-group">
+      <label class="m-radio-item"><input type="radio" name="m-exp" value="copy" checked> Save a copy</label>
+      <label class="m-radio-item"><input type="radio" name="m-exp" value="replace"> Replace original</label>
+    </div>
+    <label class="m-check-item" style="margin-top:8px"><input type="checkbox" checked> Flatten edits</label>
+    <button class="m-btn-primary" id="m-export-confirm" style="width:100%;margin-top:16px;">Export</button>
+  </div>
+</div>
+
+<!-- Hidden mobile image input -->
+<input type="file" id="m-image-input" accept="image/*" style="display:none">
 
 <script src="js/app.js"></script>
 </body>

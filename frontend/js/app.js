@@ -15,6 +15,11 @@ class PDFFooterEditor {
         this.activeTool = 'select';
         this.fileName = '';
         this.imageVersion = 0;
+        this.isMobile = window.matchMedia('(max-width: 768px)').matches || 
+                        (window.matchMedia('(hover: none) and (pointer: coarse)').matches && window.innerWidth < 1024);
+        this.activeSheet = null;
+        this.mFindResults = [];
+        this.mFindIndex = -1;
 
         this.init();
     }
@@ -23,6 +28,7 @@ class PDFFooterEditor {
         this.bindEvents();
         this.setupDragAndDrop();
         this.setupKeyboardShortcuts();
+        if (this.isMobile) this.initMobile();
     }
 
     /* ========================================
@@ -262,12 +268,21 @@ class PDFFooterEditor {
        FIND OVERLAY
        ======================================== */
     openFind() {
+        if (this.isMobile) {
+            this.openSheet('m-find-sheet');
+            setTimeout(() => this.$('m-find-input').focus(), 350);
+            return;
+        }
         this.$('findOverlay').classList.add('open');
         this.$('find-input').focus();
         this.$('find-input').select();
     }
 
     closeFind() {
+        if (this.isMobile) {
+            if (this.activeSheet === 'm-find-sheet') this.closeSheet();
+            return;
+        }
         this.$('findOverlay').classList.remove('open');
     }
 
@@ -331,9 +346,14 @@ class PDFFooterEditor {
     showEditor() {
         this.$('emptyState').style.display = 'none';
         this.$('editor').classList.add('active');
-        this.$('pagesDrawer').classList.add('open');
+        if (!this.isMobile) this.$('pagesDrawer').classList.add('open');
         this.$('fname').textContent = this.fileName;
         this.$('page-count').textContent = this.totalPages;
+        if (this.isMobile) {
+            this.$('m-filename').textContent = this.fileName;
+            this.$('m-pages-count').textContent = this.totalPages;
+            setTimeout(() => this.fitPage(), 100);
+        }
     }
 
     /* ========================================
@@ -446,6 +466,11 @@ class PDFFooterEditor {
         this.selectedBlock = block;
         element.classList.add('selected');
 
+        if (this.isMobile) {
+            this.openMobileEditSheet(block);
+            return;
+        }
+
         // Open panel
         this.openPanel('Edit Text');
         this.updateEditPanel(block);
@@ -459,6 +484,7 @@ class PDFFooterEditor {
         if (existing) existing.remove();
         this.selectedBlock = null;
         this.resetEditPanel();
+        if (this.isMobile && this.activeSheet === 'm-edit-sheet') this.closeSheet();
     }
 
     showInlineEditor(block, element) {
@@ -755,9 +781,13 @@ class PDFFooterEditor {
 
     fitPage() {
         const c = this.$('viewer-content');
-        const zx = (c.clientWidth - 64) / 595;
-        const zy = (c.clientHeight - 64) / 842;
-        this.zoom = Math.min(zx, zy);
+        if (this.isMobile) {
+            this.zoom = (c.clientWidth - 16) / 595;
+        } else {
+            const zx = (c.clientWidth - 64) / 595;
+            const zy = (c.clientHeight - 64) / 842;
+            this.zoom = Math.min(zx, zy);
+        }
         this.loadPage(this.currentPage);
         this.updateZoomLevel();
     }
@@ -772,6 +802,8 @@ class PDFFooterEditor {
 
     updatePageInfo() {
         this.$('page-info').textContent = `${this.currentPage} / ${this.totalPages}`;
+        const mInfo = this.$('m-page-info');
+        if (mInfo) mInfo.textContent = `${this.currentPage} / ${this.totalPages}`;
     }
 
     updateThumbnailHighlight() {
@@ -937,6 +969,541 @@ class PDFFooterEditor {
             toast.style.opacity = '0';
             setTimeout(() => toast.remove(), 200);
         }, 3000);
+    }
+    /* ========================================
+       MOBILE INITIALIZATION
+       ======================================== */
+    initMobile() {
+        this.setupMobileToolbar();
+        this.setupMobileTopBar();
+        this.setupSheetOverlay();
+        this.setupMobileEditSheet();
+        this.setupMobileFindSheet();
+        this.setupMobilePagesSheet();
+        this.setupMobileFooterSheet();
+        this.setupMobilePageNumbersSheet();
+        this.setupMobileExportSheet();
+        this.setupMobileImagePicker();
+        this.setupPinchZoom();
+        this.setupViewportHeight();
+    }
+
+    setupViewportHeight() {
+        const setVH = () => {
+            const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`);
+        };
+        setVH();
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', setVH);
+        }
+        window.addEventListener('resize', setVH);
+    }
+
+    /* ========================================
+       MOBILE TOP BAR
+       ======================================== */
+    setupMobileTopBar() {
+        this.$('m-back').addEventListener('click', () => {
+            if (this.sessionId) this.closePDF();
+        });
+        this.$('m-undo').addEventListener('click', () => this.undo());
+        this.$('m-redo').addEventListener('click', () => this.redo());
+        this.$('m-export-btn').addEventListener('click', () => this.openSheet('m-export-sheet'));
+    }
+
+    closePDF() {
+        if (this.sessionId) {
+            fetch(`/api/pdf/${this.sessionId}`, { method: 'DELETE' }).catch(() => {});
+            this.sessionId = null;
+        }
+        this.$('editor').classList.remove('active');
+        this.$('emptyState').style.display = '';
+        this.deselectText();
+        this.closeSheet();
+    }
+
+    /* ========================================
+       MOBILE TOOLBAR
+       ======================================== */
+    setupMobileToolbar() {
+        document.querySelectorAll('.m-tool-btn[data-mtool]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tool = btn.dataset.mtool;
+                document.querySelectorAll('.m-tool-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                switch (tool) {
+                    case 'select': this.deselectText(); break;
+                    case 'find': this.openSheet('m-find-sheet'); break;
+                    case 'pages': this.openMobilePagesSheet(); break;
+                    case 'more': this.openSheet('m-tools-sheet'); break;
+                }
+            });
+        });
+
+        document.querySelectorAll('.m-sheet-item[data-maction]').forEach(item => {
+            item.addEventListener('click', () => {
+                this.closeSheet();
+                setTimeout(() => {
+                    switch (item.dataset.maction) {
+                        case 'smart-footer': this.openSheet('m-footer-sheet'); break;
+                        case 'page-numbers': this.openSheet('m-pagenum-sheet'); break;
+                        case 'insert-image': this.$('m-image-input').click(); break;
+                    }
+                }, 100);
+            });
+        });
+    }
+
+    /* ========================================
+       BOTTOM SHEET MANAGEMENT
+       ======================================== */
+    openSheet(sheetId) {
+        if (this.activeSheet === sheetId) return;
+        this.closeSheet();
+        this.activeSheet = sheetId;
+        this.$('m-sheet-overlay').classList.add('active');
+        const sheet = this.$(sheetId);
+        requestAnimationFrame(() => sheet.classList.add('open'));
+    }
+
+    closeSheet() {
+        if (!this.activeSheet) return;
+        const sheet = this.$(this.activeSheet);
+        if (sheet) sheet.classList.remove('open');
+        this.$('m-sheet-overlay').classList.remove('active');
+        this.activeSheet = null;
+    }
+
+    setupSheetOverlay() {
+        this.$('m-sheet-overlay').addEventListener('click', () => this.closeSheet());
+    }
+
+    /* ========================================
+       MOBILE TEXT EDITING
+       ======================================== */
+    setupMobileEditSheet() {
+        this.$('m-edit-cancel').addEventListener('click', () => {
+            this.deselectText();
+        });
+
+        this.$('m-edit-apply').addEventListener('click', () => {
+            this.applyMobileEdit();
+        });
+
+        this.$('m-scope')?.addEventListener?.('change', () => {});
+    }
+
+    openMobileEditSheet(block) {
+        this.$('m-edit-current').textContent = block.text;
+        this.$('m-edit-font').textContent = block.font_name || '—';
+        this.$('m-edit-size').value = Math.round(block.font_size);
+        this.$('m-edit-color').value = this.rgbToHex(block.color);
+        this.$('m-edit-new').value = block.text;
+        this.$('m-edit-apply').disabled = false;
+
+        this.openSheet('m-edit-sheet');
+
+        setTimeout(() => {
+            const input = this.$('m-edit-new');
+            input.focus();
+            input.select();
+        }, 350);
+    }
+
+    async applyMobileEdit() {
+        if (!this.selectedBlock) return;
+
+        const newText = this.$('m-edit-new').value;
+        const scope = document.querySelector('input[name="m-scope"]:checked')?.value || 'current';
+        const fontSize = parseFloat(this.$('m-edit-size').value);
+        const color = this.$('m-edit-color').value;
+
+        if (!newText.trim()) {
+            this.showToast('Please enter replacement text', 'warning');
+            return;
+        }
+
+        this.closeSheet();
+        this.deselectText();
+        this.showLoading('Applying changes...');
+
+        try {
+            let endpoint, body;
+
+            if (scope === 'all') {
+                endpoint = `/api/pdf/${this.sessionId}/replace-footer-all`;
+                body = { search_text: this.selectedBlock?.text || newText, new_text: newText, case_sensitive: false };
+            } else {
+                endpoint = `/api/pdf/${this.sessionId}/replace-text`;
+                body = {
+                    page_number: this.currentPage,
+                    original_text: this.selectedBlock.text,
+                    new_text: newText,
+                    bbox: this.selectedBlock.bbox,
+                    font_size: fontSize,
+                    color: this.hexToRgb(color)
+                };
+            }
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to apply changes');
+            }
+
+            const result = await response.json();
+            this.showToast(result.message || 'Changes applied', 'success');
+            this.refreshPage();
+        } catch (error) {
+            this.showToast(error.message, 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /* ========================================
+       MOBILE FIND & REPLACE
+       ======================================== */
+    setupMobileFindSheet() {
+        this.$('m-find-input').addEventListener('input', () => this.mFindAcrossPages());
+        this.$('m-find-close').addEventListener('click', () => this.closeSheet());
+        this.$('m-replace-toggle').addEventListener('click', () => {
+            const sec = this.$('m-replace-section');
+            const btn = this.$('m-replace-toggle');
+            const isOpen = sec.classList.toggle('open');
+            btn.classList.toggle('active', isOpen);
+        });
+        this.$('m-replace-one').addEventListener('click', () => this.mReplaceSelected());
+        this.$('m-replace-all-m').addEventListener('click', () => this.mReplaceAll());
+    }
+
+    async mFindAcrossPages() {
+        if (!this.sessionId) return;
+        const searchText = this.$('m-find-input').value.trim();
+        if (!searchText) {
+            this.$('m-find-count').textContent = '';
+            this.$('m-find-results').textContent = '';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/pdf/${this.sessionId}/find-across-pages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ search_text: searchText, case_sensitive: false })
+            });
+            if (!response.ok) throw new Error('Search failed');
+            const result = await response.json();
+            this.mFindResults = result.occurrences;
+            this.mFindIndex = result.total_count > 0 ? 0 : -1;
+            this.$('m-find-count').textContent = result.total_count > 0
+                ? `${this.mFindIndex + 1}/${result.total_count}`
+                : 'No matches';
+
+            if (result.total_count > 0 && result.occurrences[0]) {
+                this.$('m-find-results').textContent = `Page ${result.occurrences[0].page_number}`;
+            } else {
+                this.$('m-find-results').textContent = '';
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    async mReplaceSelected() {
+        if (!this.mFindResults.length) return;
+        const newText = this.$('m-replace-input').value;
+        if (!newText) { this.showToast('Enter replacement text', 'warning'); return; }
+        if (this.mFindIndex >= 0 && this.mFindIndex < this.mFindResults.length) {
+            const occ = this.mFindResults[this.mFindIndex];
+            await this.replaceOccurrences([occ], newText);
+            await this.mFindAcrossPages();
+        }
+    }
+
+    async mReplaceAll() {
+        if (!this.mFindResults.length) return;
+        const newText = this.$('m-replace-input').value;
+        if (!newText) { this.showToast('Enter replacement text', 'warning'); return; }
+        await this.replaceOccurrences(this.mFindResults, newText);
+        this.$('m-find-count').textContent = '';
+        this.$('m-find-results').textContent = '';
+    }
+
+    /* ========================================
+       MOBILE PAGES SHEET
+       ======================================== */
+    setupMobilePagesSheet() {}
+
+    openMobilePagesSheet() {
+        const grid = this.$('m-pages-grid');
+        grid.innerHTML = '';
+
+        for (let i = 1; i <= this.totalPages; i++) {
+            const thumb = document.createElement('div');
+            thumb.className = 'm-page-thumb' + (i === this.currentPage ? ' current' : '');
+
+            const box = document.createElement('div');
+            box.className = 'm-page-thumb-box';
+
+            const img = document.createElement('img');
+            img.src = `/api/pdf/${this.sessionId}/page/${i}/thumbnail`;
+            img.alt = `Page ${i}`;
+            img.loading = 'lazy';
+
+            const num = document.createElement('div');
+            num.className = 'm-page-thumb-num';
+            num.textContent = i;
+
+            box.appendChild(img);
+            thumb.appendChild(box);
+            thumb.appendChild(num);
+
+            thumb.addEventListener('click', () => {
+                this.loadPage(i);
+                this.closeSheet();
+            });
+
+            grid.appendChild(thumb);
+        }
+
+        this.openSheet('m-pages-sheet');
+    }
+
+    /* ========================================
+       MOBILE SMART FOOTER
+       ======================================== */
+    setupMobileFooterSheet() {
+        this.$('m-detect-footer').addEventListener('click', () => this.mDetectFooters());
+        this.$('m-footer-apply').addEventListener('click', () => this.mApplyFooterReplace());
+        this.$('m-footer-cancel').addEventListener('click', () => {
+            this.$('m-footer-edit').style.display = 'none';
+            this.$('m-footer-results').innerHTML = '';
+            this.$('m-detect-footer').style.display = '';
+        });
+    }
+
+    async mDetectFooters() {
+        if (!this.sessionId) return;
+        this.showLoading('Detecting footers...');
+
+        try {
+            const response = await fetch(`/api/pdf/${this.sessionId}/smart-footer/detect`, {
+                method: 'POST'
+            });
+            if (!response.ok) throw new Error('Detection failed');
+            const data = await response.json();
+            this.hideLoading();
+
+            const container = this.$('m-footer-results');
+            container.innerHTML = '';
+            this.$('m-detect-footer').style.display = 'none';
+
+            if (!data.elements || data.elements.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-tertiary);font-size:13px;margin-top:12px;">No footers detected.</p>';
+                return;
+            }
+
+            data.elements.forEach(el => {
+                const item = document.createElement('div');
+                item.className = 'm-footer-item';
+                item.innerHTML = `
+                    <div class="m-footer-item-text">${this.esc(el.text)}</div>
+                    <div class="m-footer-item-pages">p. ${(el.pages || []).length || '?'}</div>
+                `;
+                item.addEventListener('click', () => {
+                    this.$('m-footer-original').textContent = el.text;
+                    this.$('m-footer-new').value = el.text;
+                    this.$('m-footer-edit').style.display = '';
+                    this._selectedFooterElement = el;
+                });
+                container.appendChild(item);
+            });
+        } catch (error) {
+            this.hideLoading();
+            this.showToast(error.message, 'error');
+        }
+    }
+
+    async mApplyFooterReplace() {
+        if (!this._selectedFooterElement || !this.sessionId) return;
+        const newText = this.$('m-footer-new').value;
+        if (!newText.trim()) {
+            this.showToast('Enter replacement text', 'warning');
+            return;
+        }
+
+        this.closeSheet();
+        this.showLoading('Replacing footer...');
+
+        try {
+            const response = await fetch(`/api/pdf/${this.sessionId}/smart-footer/replace`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    element: this._selectedFooterElement,
+                    new_text: newText,
+                    pages: null
+                })
+            });
+            if (!response.ok) throw new Error('Replace failed');
+            const result = await response.json();
+            this.showToast(result.message || 'Footer replaced', 'success');
+            this.refreshPage();
+            this.$('m-footer-edit').style.display = 'none';
+            this.$('m-footer-results').innerHTML = '';
+            this.$('m-detect-footer').style.display = '';
+        } catch (error) {
+            this.showToast(error.message, 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /* ========================================
+       MOBILE PAGE NUMBERS
+       ======================================== */
+    setupMobilePageNumbersSheet() {
+        this.$('m-pn-apply').addEventListener('click', () => this.mApplyPageNumbers());
+        this.$('m-pn-cancel').addEventListener('click', () => this.closeSheet());
+    }
+
+    async mApplyPageNumbers() {
+        if (!this.sessionId) return;
+
+        const formatStr = this.$('m-pn-format').value;
+        const position = this.$('m-pn-position').value;
+        const startAt = parseInt(this.$('m-pn-start').value) || 1;
+
+        this.closeSheet();
+        this.showLoading('Adding page numbers...');
+
+        try {
+            const response = await fetch(`/api/pdf/${this.sessionId}/page-numbers/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    format_str: formatStr,
+                    position: position,
+                    start_at: startAt
+                })
+            });
+            if (!response.ok) throw new Error('Failed to add page numbers');
+            const result = await response.json();
+            this.showToast(result.message || 'Page numbers added', 'success');
+            this.refreshPage();
+        } catch (error) {
+            this.showToast(error.message, 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /* ========================================
+       MOBILE EXPORT
+       ======================================== */
+    setupMobileExportSheet() {
+        this.$('m-export-confirm').addEventListener('click', () => {
+            this.closeSheet();
+            this.exportPDF();
+        });
+    }
+
+    /* ========================================
+       MOBILE IMAGE PICKER
+       ======================================== */
+    setupMobileImagePicker() {
+        this.$('m-image-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file || !this.sessionId) return;
+            e.target.value = '';
+
+            this.showLoading('Inserting image...');
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const uploadResp = await fetch(`/api/pdf/${this.sessionId}/image/upload`, {
+                    method: 'POST', body: formData
+                });
+                if (!uploadResp.ok) throw new Error('Image upload failed');
+                const uploadData = await uploadResp.json();
+
+                const insertResp = await fetch(`/api/pdf/${this.sessionId}/image/insert`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        image_path: uploadData.image_path,
+                        page_number: this.currentPage,
+                        x: 100, y: 100,
+                        apply_to_all: 'false'
+                    })
+                });
+                if (!insertResp.ok) throw new Error('Image insert failed');
+                this.showToast('Image inserted', 'success');
+                this.refreshPage();
+            } catch (error) {
+                this.showToast(error.message, 'error');
+            } finally {
+                this.hideLoading();
+            }
+        });
+    }
+
+    /* ========================================
+       PINCH ZOOM
+       ======================================== */
+    setupPinchZoom() {
+        const container = this.$('viewer-container');
+        let initialDistance = 0;
+        let initialZoom = 1;
+        let lastTap = 0;
+
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                initialDistance = this.getTouchDistance(e.touches);
+                initialZoom = this.zoom;
+            } else if (e.touches.length === 1) {
+                const now = Date.now();
+                if (now - lastTap < 300) {
+                    e.preventDefault();
+                    if (this.zoom > 1.0) {
+                        this.zoom = 1.0;
+                    } else {
+                        this.zoom = 2.0;
+                    }
+                    this.loadPage(this.currentPage);
+                    this.updateZoomLevel();
+                }
+                lastTap = now;
+            }
+        }, { passive: false });
+
+        container.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const currentDistance = this.getTouchDistance(e.touches);
+                const scale = currentDistance / initialDistance;
+                this.zoom = Math.max(0.25, Math.min(3.0, initialZoom * scale));
+                this.loadPage(this.currentPage);
+                this.updateZoomLevel();
+            }
+        }, { passive: false });
+    }
+
+    getTouchDistance(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 }
 
